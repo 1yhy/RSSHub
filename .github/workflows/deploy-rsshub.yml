@@ -1,0 +1,34 @@
+name: 自动部署RSSHub到服务器
+
+on:
+  push:
+    branches:
+      - master  # 或者您的主分支名称，如main
+
+jobs:
+  deploy-rsshub:
+    name: 构建并部署RSSHub
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 配置SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}  # 使用GitHub Secrets中配置的私钥
+
+      - name: 添加服务器到known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: 复制项目文件到服务器
+        run: |
+          rsync -avz --exclude='.git' --exclude='node_modules' ./ root@${{ secrets.SERVER_IP }}:/root/data/docker_data/rsshub/
+
+      - name: 构建并重启容器
+        run: |
+          ssh root@${{ secrets.SERVER_IP }} "cd /root/data/docker_data/rsshub/ && docker compose down && docker compose build --build-arg PUPPETEER_SKIP_DOWNLOAD=0 && docker compose up -d"
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SERVER_IP }}
